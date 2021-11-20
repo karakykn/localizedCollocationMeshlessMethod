@@ -9,8 +9,8 @@ spatialSteps = [1/4,1/4]
 vertices1 = np.array([[-1,-1],[1,-1],[1,1],[-1,1],[-1,-1]]) #counter clockwise domain vertices, start from lower left point
 rbf = 'MQ'
 shapeParameter = 16
-dt = 1e-4
-endTime = 1e0
+dt = 1e-3
+endTime = 5e-1
 iterLimit = 3e3
 mode = 'transient'
 
@@ -29,10 +29,10 @@ solution = LRBFCM(mesh, shapeParam=shapeParameter, rbf=rbf)
 solution.interfacePoissonMixTest(mode, g2, dt=dt, endTime=endTime, tolerance=1e-6, iterLim=iterLimit, beta2=beta2, beta1=beta1, k1=k1, k2=k2)
 
 df = pd.DataFrame(np.array([solution.solnOuter, solution.mesh.locations[:,0], solution.mesh.locations[:,1]]).T, columns=['Approx. soln.','x','y'])
-df.to_csv('records/results_intefraceOuter.csv', index=False)
+df.to_csv('records/results_interfaceOuter.csv', index=False)
 
 df = pd.DataFrame(np.array([solution.solnInner, solution.mesh.interfaceLocs[:,0], solution.mesh.interfaceLocs[:,1]]).T, columns=['Approx. soln.','x','y'])
-df.to_csv('records/results_intefraceInner.csv', index=False)
+df.to_csv('records/results_interfaceInner.csv', index=False)
 
 # """Plotting the nodes"""
 # fig = plt.figure()

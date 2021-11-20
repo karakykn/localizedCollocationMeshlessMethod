@@ -1346,7 +1346,7 @@ class LRBFCM(object):
                 if self.subDomains[k][i] < self.mesh.boundaryNodeNo:
                     bcSys[i, :] = self.f[k][i,:]
                 elif self.subDomains[k][i] >= self.mesh.nodeNo:
-                    bcSys[i, :] = beta2*(n_out[self.subDomains[k][i]-self.mesh.nodeNo,0]*self.fx[k][i,:] + n_out[self.subDomains[k][i]-self.mesh.nodeNo,1]*self.fy[k][i,:])
+                    bcSys[i, :] = (beta1+beta2)*(n_out[self.subDomains[k][i]-self.mesh.nodeNo,0]*self.fx[k][i,:] + n_out[self.subDomains[k][i]-self.mesh.nodeNo,1]*self.fy[k][i,:]) #beta2-->(beta1+beta2) assuming v_1 = v_2
                 else:
                     bcSys[i, :] = self.f[k][i,:]
             self.invBcSys[k] = np.linalg.pinv(bcSys)
@@ -1386,53 +1386,69 @@ class LRBFCM(object):
                     ind = np.where(self.subDomains_ifc[i-self.mesh.interfaceBNN]==i)
                     self.solnInner[i] += dt*beta1*np.matmul(self.fxx_ifc[i-self.mesh.interfaceBNN][ind,:] + self.fyy_ifc[i-self.mesh.interfaceBNN][ind,:], alphaInner[i-self.mesh.interfaceBNN]) + dt*source_f2(self.mesh.interfaceLocs[i,0], self.mesh.interfaceLocs[i,1],time*dt) + dt*k1*self.solnInner[i]
 
-                if time == 0:
-                    self.solnOuter[self.mesh.nodeNo:] = 1 #cold starting
+                for i in range(self.mesh.nodeNo, self.mesh.nodeNo+self.mesh.interfaceBNN):
+                    for k in range(self.subDomNo):
+                        if i in self.subDomains[k]:
+                            ind = np.where(self.subDomains[k]==i)
+                            break
+                    bcRhs = np.zeros(self.subDomains[k].shape[0])
+                    for j in range(self.subDomains[k].shape[0]):
+                        if self.subDomains[k][j] < self.mesh.nodeNo:
+                            bcRhs[j] = localSoln_out[k][j]
+                        else:
+                            bcRhs[j] = g2_f(self.mesh.locations[self.subDomains[k][j],0],self.mesh.locations[self.subDomains[k][j],1])
+                    alphaBc = np.matmul(self.invBcSys[k],bcRhs)
+                    self.solnOuter[i] = np.matmul(self.f[k][ind,:], alphaBc)
 
-                v1_x_old = 300*np.ones(self.mesh.interfaceBNN)
-                v1_y_old = 300*np.ones(self.mesh.interfaceBNN)
-                v1_old = 300*np.ones(self.mesh.interfaceBNN)
-                while True:
-                    self.solnInner[:self.mesh.interfaceBNN] = interfaceInnerBC(self.solnOuter[self.mesh.nodeNo:],self.mesh.interfaceLocs[:self.mesh.interfaceBNN,0],self.mesh.interfaceLocs[:self.mesh.interfaceBNN,1])
+                self.solnInner[:self.mesh.interfaceBNN] = interfaceInnerBC(self.solnOuter[self.mesh.nodeNo:],self.mesh.interfaceLocs[:self.mesh.interfaceBNN,0],self.mesh.interfaceLocs[:self.mesh.interfaceBNN,1])
 
-                    for k in range(self.subDomains_ifc.shape[0]):
-                        for i in range(self.subDomains_ifc[k].shape[0]):
-                            localSoln_in[k][i] = self.solnInner[self.subDomains_ifc[k][i]]
-                        alphaInner[k] = np.matmul(self.invPnns_ifc[k],localSoln_in[k])
-
-                    for i in range(self.mesh.interfaceBNN):
-                        for k in range(self.subDomains_ifc.shape[0]):
-                            if i in self.subDomains_ifc[k]:
-                                ind = np.where(self.subDomains_ifc[k]==i)
-                                break
-                        v1_x[i] = np.matmul(self.fx_ifc[k][ind,:],alphaInner[k])
-                        v1_y[i] = np.matmul(self.fy_ifc[k][ind,:],alphaInner[k])
-
-                    for i in range(self.mesh.nodeNo, self.mesh.nodeNo+self.mesh.interfaceBNN):
-                        for k in range(self.subDomNo):
-                            if i in self.subDomains[k]:
-                                ind = np.where(self.subDomains[k]==i)
-                                break
-                        bcRhs = np.zeros(self.subDomains[k].shape[0])
-                        for j in range(self.subDomains[k].shape[0]):
-                            if self.subDomains[k][j] < self.mesh.nodeNo:
-                                bcRhs[j] = localSoln_out[k][j]
-                            else:
-                                bcRhs[j] = g2 + beta1*(-n_out[self.subDomains[k][j]-self.mesh.nodeNo,0]*v1_x[self.subDomains[k][j]-self.mesh.nodeNo] - n_out[self.subDomains[k][j]-self.mesh.nodeNo,1]*v1_y[self.subDomains[k][j]-self.mesh.nodeNo])
-                        alphaBc = np.matmul(self.invBcSys[k],bcRhs)
-                        self.solnOuter[i] = np.matmul(self.f[k][ind,:], alphaBc)
-
-                    res1 = np.max(np.abs(self.solnInner[:self.mesh.interfaceBNN] - v1_old))
-                    res2 = np.max(np.abs(v1_x - v1_x_old))
-                    res3 = np.max(np.abs(v1_y - v1_y_old))
-                    epsy = 1e-12
-                    print(res1,res2,res3)
-                    if res1<epsy and res2<epsy and res3<epsy:
-                        break
-
-                    v1_old[:] = self.solnInner[:self.mesh.interfaceBNN]
-                    v1_x_old[:] = v1_x[:]
-                    v1_y_old[:] = v1_y[:]
+                # if time == 0:
+                #     self.solnOuter[self.mesh.nodeNo:] = 1 #cold starting
+                #
+                # v1_x_old = 300*np.ones(self.mesh.interfaceBNN)
+                # v1_y_old = 300*np.ones(self.mesh.interfaceBNN)
+                # v1_old = 300*np.ones(self.mesh.interfaceBNN)
+                # while True:
+                #     self.solnInner[:self.mesh.interfaceBNN] = interfaceInnerBC(self.solnOuter[self.mesh.nodeNo:],self.mesh.interfaceLocs[:self.mesh.interfaceBNN,0],self.mesh.interfaceLocs[:self.mesh.interfaceBNN,1])
+                #
+                #     for k in range(self.subDomains_ifc.shape[0]):
+                #         for i in range(self.subDomains_ifc[k].shape[0]):
+                #             localSoln_in[k][i] = self.solnInner[self.subDomains_ifc[k][i]]
+                #         alphaInner[k] = np.matmul(self.invPnns_ifc[k],localSoln_in[k])
+                #
+                #     for i in range(self.mesh.interfaceBNN):
+                #         for k in range(self.subDomains_ifc.shape[0]):
+                #             if i in self.subDomains_ifc[k]:
+                #                 ind = np.where(self.subDomains_ifc[k]==i)
+                #                 break
+                #         v1_x[i] = np.matmul(self.fx_ifc[k][ind,:],alphaInner[k])
+                #         v1_y[i] = np.matmul(self.fy_ifc[k][ind,:],alphaInner[k])
+                #
+                #     for i in range(self.mesh.nodeNo, self.mesh.nodeNo+self.mesh.interfaceBNN):
+                #         for k in range(self.subDomNo):
+                #             if i in self.subDomains[k]:
+                #                 ind = np.where(self.subDomains[k]==i)
+                #                 break
+                #         bcRhs = np.zeros(self.subDomains[k].shape[0])
+                #         for j in range(self.subDomains[k].shape[0]):
+                #             if self.subDomains[k][j] < self.mesh.nodeNo:
+                #                 bcRhs[j] = localSoln_out[k][j]
+                #             else:
+                #                 bcRhs[j] = g2_f(self.mesh.locations[self.subDomains[k][j],0],self.mesh.locations[self.subDomains[k][j],1]) + beta1*(-n_out[self.subDomains[k][j]-self.mesh.nodeNo,0]*v1_x[self.subDomains[k][j]-self.mesh.nodeNo] - n_out[self.subDomains[k][j]-self.mesh.nodeNo,1]*v1_y[self.subDomains[k][j]-self.mesh.nodeNo])
+                #         alphaBc = np.matmul(self.invBcSys[k],bcRhs)
+                #         self.solnOuter[i] = np.matmul(self.f[k][ind,:], alphaBc)
+                #
+                #     res1 = np.max(np.abs(self.solnInner[:self.mesh.interfaceBNN] - v1_old))
+                #     res2 = np.max(np.abs(v1_x - v1_x_old))
+                #     res3 = np.max(np.abs(v1_y - v1_y_old))
+                #     epsy = 1e-5
+                #     print(res1,res2,res3)
+                #     if res1<epsy and res2<epsy and res3<epsy:
+                #         break
+                #
+                #     v1_old[:] = self.solnInner[:self.mesh.interfaceBNN]
+                #     v1_x_old[:] = v1_x[:]
+                #     v1_y_old[:] = v1_y[:]
 
                 print('Time:    ', (time+1)*dt)
 
@@ -1565,6 +1581,8 @@ def source_f1(x,y,t=0):
     return 0
 def source_f2(x,y,t=0):
     return 0
+def g2_f(x,y):
+    return -30*np.cos(x)
 
 """------------------"""
 
