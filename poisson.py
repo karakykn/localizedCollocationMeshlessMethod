@@ -1,4 +1,4 @@
-from LCMM.classes import *
+from classes import *
 import matplotlib.pyplot as plt
 
 """Input variables for meshing"""
