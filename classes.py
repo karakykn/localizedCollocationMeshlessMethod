@@ -107,7 +107,7 @@ class Mesh(object):
             self.boundaryNodeNo += self.faces[i].shape[0]
 
     def connectivity(self):
-        """Create connectivity matrix.
+        """Create connectivity matrix. Only works for rectangular domains.
 
         Returns
         -----------
@@ -116,11 +116,18 @@ class Mesh(object):
 
         """
 
+        self.intervalNo = np.array([(np.max(self.locations[:,0])-np.min(self.locations[:,0]))/self.spatialSteps[0],(np.max(self.locations[:,1])-np.min(self.locations[:,1]))/self.spatialSteps[1]],dtype=int)
         epl = self.intervalNo[0]
         npl=epl+1
         self.connect=np.zeros((2*self.intervalNo[0]*self.intervalNo[1], 3), dtype=int)
 
-        if self.domainShape == 'rectangular':
+        rectangularCheck = 0
+        if self.vertices.shape[0] == 5:
+            for i in range(4):
+                if self.vertices[i,0] == self.vertices[i+1,0] or self.vertices[i,1] == self.vertices[i+1,1]:
+                    rectangularCheck += 1
+
+        if rectangularCheck == 4:
 
             for i in range(self.intervalNo[1]):
                 for j in range(self.intervalNo[0]):
@@ -1396,7 +1403,8 @@ class LRBFCM(object):
                         if self.subDomains[k][j] < self.mesh.nodeNo:
                             bcRhs[j] = localSoln_out[k][j]
                         else:
-                            bcRhs[j] = g2_f(self.mesh.locations[self.subDomains[k][j],0],self.mesh.locations[self.subDomains[k][j],1])
+                            # bcRhs[j] = g2_f(self.mesh.locations[self.subDomains[k][j],0],self.mesh.locations[self.subDomains[k][j],1])
+                            bcRhs[j] = 30*n_out[self.subDomains[k][j]-self.mesh.nodeNo,0]
                     alphaBc = np.matmul(self.invBcSys[k],bcRhs)
                     self.solnOuter[i] = np.matmul(self.f[k][ind,:], alphaBc)
 
@@ -1582,7 +1590,8 @@ def source_f1(x,y,t=0):
 def source_f2(x,y,t=0):
     return 0
 def g2_f(x,y):
-    return -30*np.cos(x)
+    theta = np.arctan(x/y)
+    return -30*np.cos(theta)
 
 """------------------"""
 
@@ -1666,11 +1675,11 @@ def pointCheck(point, vertices, yChangingVertIndex, yChangingVertIndexOrie):
     dummyPoint = point + np.array([0,0])
     intersectionCounter = 0
     for i in yChangingVertIndex:
-        farPoint = np.array([np.max(vertices[yChangingVertIndex, 0]) + 10, dummyPoint[1]])
+        farPoint = np.array([np.max(vertices[yChangingVertIndex, 0]) + 1000, dummyPoint[1]])
         if doIntersect(dummyPoint, farPoint, vertices[i,:], vertices[i+1,:]):
             intersectionCounter +=1
     for i in yChangingVertIndexOrie:
-        farPoint = np.array([np.min(vertices[yChangingVertIndex, 0]) - 10, dummyPoint[1]])
+        farPoint = np.array([np.min(vertices[yChangingVertIndex, 0]) - 1000, dummyPoint[1]])
         if doIntersect(dummyPoint, farPoint, vertices[i,:], vertices[i+1,:]):
             intersectionCounter +=1
     if intersectionCounter == 2:

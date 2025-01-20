@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 
 """Input variables for meshing"""
 spatialSteps = [1/10,1/10]
-vertices = np.array([[0,0],[1,0],[1,1],[0,1],[0,0]]) #counter clockwise domain vertices, start from lower left point
+vertices = np.array([[0,0],[10,0],[10,2],[0,2],[0,0]]) #counter clockwise domain vertices, start from lower left point
 dt = 1e-4
 endTime = 1e-1
 iterLimit = 3e3
